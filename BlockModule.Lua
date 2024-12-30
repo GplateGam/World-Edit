@@ -10,6 +10,22 @@ local DeleteEvent = RemotesFolder:WaitForChild("DeleteEvent")
 
 local LocalPlayer = Players.LocalPlayer
 
+local function EquipTool(ToolName)
+    local Backpack = LocalPlayer:FindFirstChild("Backpack")
+    if not Backpack then return end
+
+    local Tool = Backpack:FindFirstChild(ToolName)
+    if not Tool then return end
+
+    local Character = LocalPlayer.Character
+    if not Character then return end
+
+    local Humanoid = Character:FindFirstChildWhichIsA("Humanoid")
+    if not Humanoid then return end
+
+    Humanoid:EquipTool(Tool)
+end
+
 local function FindNearbyBlock(TargetCFrame)
     local OverlapParams = OverlapParams.new()
     local FilterDescendants = {}
