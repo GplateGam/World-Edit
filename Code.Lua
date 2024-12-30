@@ -1,6 +1,6 @@
 -- Customizable
 
-local PlaceBlockDelayTime = 0.07
+local PlaceBlockDelayTime = 0.03 -- 0.1 for OG Servers
 local RemoveBlockDelayTime = 0.03
 
 -- Script
