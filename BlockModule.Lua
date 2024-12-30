@@ -69,6 +69,8 @@ local function FindNearbyBlock(TargetCFrame)
 end
 
 function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame)
+    EquipTool("BuildingTool")
+
     local NearbyBlock = FindNearbyBlock(BlockCFrame)
     if not NearbyBlock then
         return nil
@@ -94,10 +96,14 @@ function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame)
 end
 
 function BlockModule.DeleteBlock(Block)
+    EquipTool("DeleteTool")
+
     DeleteEvent:FireServer(Block)
 end
 
 function BlockModule.PaintBlock(Block, Color, EnumMaterial)
+    EquipTool("PaintTool")
+
     local Args = {
         [1] = Block,
         [2] = "Paint",
@@ -109,6 +115,8 @@ end
 
 function BlockModule.Resize(Block, ResizeVector, ShrinkOrGrow)
     if ShrinkOrGrow ~= "Shrink" and ShrinkOrGrow ~= "Grow" then return end
+
+    EquipTool("ResizeTool")
     
     local Args = {
         [1] = Block,
