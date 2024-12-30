@@ -2,10 +2,13 @@ local BlockModule = {}
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes")
 local BuildEvent = RemotesFolder:WaitForChild("BuildEvent")
 local DeleteEvent = RemotesFolder:WaitForChild("DeleteEvent")
+
+local LocalPlayer = Players.LocalPlayer
 
 local function FindNearbyBlock(TargetCFrame)
     local OverlapParams = OverlapParams.new()
