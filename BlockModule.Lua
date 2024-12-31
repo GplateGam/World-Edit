@@ -147,9 +147,13 @@ function BlockModule.PaintBlock(Block, Color, EnumMaterial)
     DeleteEvent:FireServer(unpack(Args))
 end
 
-function BlockModule.Resize(Block, ResizeVector, ShrinkOrGrow)
+function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow)
     if not Block or typeof(Block) ~= "Instance" then
         warn("Block must be an Instance")
+        return
+    end
+
+    if Block:GetAttribute("FakeBlock") and Block:GetAttribute("FakeBlock") == true  then
         return
     end
 
