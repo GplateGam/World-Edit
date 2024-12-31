@@ -107,4 +107,12 @@ function CFrameUtilities.CastRay()
    return nil
 end
 
+function CFrameUtilities.RoundToGrid(Position, Grid)
+	return Vector3.new(
+		math.round(Position.X / Grid.X) * Grid.X,
+		math.floor(Position.Y / Grid.Y) * Grid.Y + Grid.Y / 2,
+		math.round(Position.Z / Grid.Z) * Grid.Z
+	)
+end
+
 return CFrameUtilities
