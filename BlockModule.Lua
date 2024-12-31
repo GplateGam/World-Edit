@@ -153,7 +153,7 @@ function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow)
         return
     end
 
-    if Block:GetAttribute("FakeBlock") and Block:GetAttribute("FakeBlock") == true  then
+    if Block:GetAttribute("FakeBlock") then
         return
     end
 
