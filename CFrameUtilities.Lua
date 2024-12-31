@@ -79,9 +79,7 @@ function CFrameUtilities.CastRay()
     local UserInputService = game:GetService("UserInputService")
     local Workspace = game:GetService("Workspace")
 
-    local Camera = Workspace:FindFirstChild("CurrentCamera")
-    if not Camera then return nil end
-
+    local Camera = Workspace.CurrentCamera
     local LocalPlayer = game:GetService("Players").LocalPlayer
     if not LocalPlayer then return nil end
     
