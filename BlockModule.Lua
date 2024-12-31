@@ -166,16 +166,29 @@ function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow)
         warn("ShrinkOrGrow must be either 'Shrink' or 'Grow'")
         return
     end
-    
+
     EquipTool("ResizeTool")
-    local Args = {
-        [1] = Block,
-        [2] = "Resize",
-        [3] = ResizeVector,
-        [4] = ShrinkOrGrow
-    }
-    
-    DeleteEvent:FireServer(unpack(Args))
+
+    local Axes = {"X", "Y", "Z"}
+    for _, Axis in ipairs(Axes) do
+        local AxisValue = ResizeVector[Axis]
+        if AxisValue ~= 0 then
+            local ResizeAxisVector = Vector3.new(
+                Axis == "X" and AxisValue or 0,
+                Axis == "Y" and AxisValue or 0,
+                Axis == "Z" and AxisValue or 0
+            )
+            
+            local Args = {
+                [1] = Block,
+                [2] = "Resize",
+                [3] = ResizeAxisVector,
+                [4] = ShrinkOrGrow
+            }
+
+            DeleteEvent:FireServer(unpack(Args))
+        end
+    end
 end
 
 return BlockModule
