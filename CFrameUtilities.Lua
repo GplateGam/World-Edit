@@ -49,6 +49,7 @@ function CFrameUtilities.GetBlocks(StarterCFrame, EndCFrame)
    
    local BoxSize = MaximumPosition - MinimumPosition
    local BoxCFrame = CFrame.new((MinimumPosition + MaximumPosition) / 2)
+
    local OverlapParameters = OverlapParams.new()
    OverlapParameters.FilterType = Enum.RaycastFilterType.Include
    OverlapParameters.FilterDescendantsInstances = {game:GetService("Workspace").Blocks}
@@ -57,7 +58,7 @@ function CFrameUtilities.GetBlocks(StarterCFrame, EndCFrame)
        math.abs(BoxSize.X),
        math.abs(BoxSize.Y),
        math.abs(BoxSize.Z)
-   ), OverlapParameters)
+   ) - Vector3.new(0.2, 0.2, 0.2), OverlapParameters)
    
    local Blocks = {}
 
