@@ -1,77 +1,111 @@
 local CFrameUtilities = {}
 
 function CFrameUtilities.GetPositions(Grid, StarterCFrame, EndCFrame)
-   local StarterPosition, EndPosition = StarterCFrame.Position, EndCFrame.Position
-   local MinimumPosition = Vector3.new(
-       math.min(StarterPosition.X, EndPosition.X),
-       math.min(StarterPosition.Y, EndPosition.Y),
-       math.min(StarterPosition.Z, EndPosition.Z)
-   )
-   local MaximumPosition = Vector3.new(
-       math.max(StarterPosition.X, EndPosition.X),
-       math.max(StarterPosition.Y, EndPosition.Y),
-       math.max(StarterPosition.Z, EndPosition.Z)
-   )
-  
-   local Positions = {}
-   for X = MinimumPosition.X, MaximumPosition.X, Grid.X do
-       for Y = MinimumPosition.Y, MaximumPosition.Y, Grid.Y do
-           for Z = MinimumPosition.Z, MaximumPosition.Z, Grid.Z do
-               table.insert(Positions, Vector3.new(X, Y, Z))
-               if Z % 100 == 50 then
-                   task.wait()
-               end
-           end
-           if Y % 100 == 50 then
-               task.wait()
-           end
-       end
-       if X % 100 == 50 then
-           task.wait()
-       end
-   end
-  
-   return Positions
+    local StarterPosition, EndPosition = StarterCFrame.Position, EndCFrame.Position
+    local MinimumPosition = Vector3.new(
+        math.min(StarterPosition.X, EndPosition.X),
+        math.min(StarterPosition.Y, EndPosition.Y),
+        math.min(StarterPosition.Z, EndPosition.Z)
+    )
+    local MaximumPosition = Vector3.new(
+        math.max(StarterPosition.X, EndPosition.X),
+        math.max(StarterPosition.Y, EndPosition.Y),
+        math.max(StarterPosition.Z, EndPosition.Z)
+    )
+
+    local Positions = {}
+
+    for X = MinimumPosition.X, MaximumPosition.X, Grid.X do
+        for Y = MinimumPosition.Y, MaximumPosition.Y, Grid.Y do
+            for Z = MinimumPosition.Z, MaximumPosition.Z, Grid.Z do
+                table.insert(Positions, Vector3.new(X, Y, Z))
+                if Z % 100 == 50 then
+                    task.wait()
+                end
+            end
+            if Y % 100 == 50 then
+                task.wait()
+            end
+        end
+        if X % 100 == 50 then
+            task.wait()
+        end
+    end
+
+    return Positions
 end
 
 function CFrameUtilities.GetBlocks(StarterCFrame, EndCFrame)
-   local StarterPosition, EndPosition = StarterCFrame.Position, EndCFrame.Position
-   local MinimumPosition = Vector3.new(
-       math.min(StarterPosition.X, EndPosition.X),
-       math.min(StarterPosition.Y, EndPosition.Y),
-       math.min(StarterPosition.Z, EndPosition.Z)
-   )
-   local MaximumPosition = Vector3.new(
-       math.max(StarterPosition.X, EndPosition.X),
-       math.max(StarterPosition.Y, EndPosition.Y),
-       math.max(StarterPosition.Z, EndPosition.Z)
-   )
-   
-   local BoxSize = MaximumPosition - MinimumPosition
-   local BoxCFrame = CFrame.new((MinimumPosition + MaximumPosition) / 2)
+    local StarterPosition, EndPosition = StarterCFrame.Position, EndCFrame.Position
 
-   local OverlapParameters = OverlapParams.new()
-   OverlapParameters.FilterType = Enum.RaycastFilterType.Include
-   OverlapParameters.FilterDescendantsInstances = {game:GetService("Workspace").Blocks}
-   
-   local BoundingParts = workspace:GetPartBoundsInBox(BoxCFrame, Vector3.new(
-       math.abs(BoxSize.X),
-       math.abs(BoxSize.Y),
-       math.abs(BoxSize.Z)
-   ) - Vector3.new(0.2, 0.2, 0.2), OverlapParameters)
-   
-   local Blocks = {}
+    local MinimumPosition = Vector3.new(
+        math.min(StarterPosition.X, EndPosition.X),
+        math.min(StarterPosition.Y, EndPosition.Y),
+        math.min(StarterPosition.Z, EndPosition.Z)
+    )
+    local MaximumPosition = Vector3.new(
+        math.max(StarterPosition.X, EndPosition.X),
+        math.max(StarterPosition.Y, EndPosition.Y),
+        math.max(StarterPosition.Z, EndPosition.Z)
+    )
 
-   for Index, Block in ipairs(BoundingParts) do
-       if Block.Parent == game:GetService("Workspace").Blocks then
-           table.insert(Blocks, Block)
-       end
-       if Index % 100 == 50 then
-           task.wait()
-       end
-   end
-   
-   return Blocks
+    local BoxSize = MaximumPosition - MinimumPosition
+    local BoxCFrame = CFrame.new((MinimumPosition + MaximumPosition) / 2)
+
+    local OverlapParameters = OverlapParams.new()
+    OverlapParameters.FilterType = Enum.RaycastFilterType.Include
+    OverlapParameters.FilterDescendantsInstances = {game:GetService("Workspace").Blocks}
+
+    local BoundingParts = workspace:GetPartBoundsInBox(BoxCFrame, Vector3.new(
+        math.abs(BoxSize.X),
+        math.abs(BoxSize.Y),
+        math.abs(BoxSize.Z)
+    ) - Vector3.new(0.2, 0.2, 0.2), OverlapParameters)
+
+    local Blocks = {}
+    for Index, Block in ipairs(BoundingParts) do
+        if Block.Parent == game:GetService("Workspace").Blocks then
+            table.insert(Blocks, Block)
+        end
+        if Index % 100 == 50 then
+            task.wait()
+        end
+    end
+
+    return Blocks
+end
+
+function CFrameUtilities.CastRay()
+    local UserInputService = game:GetService("UserInputService")
+    local Workspace = game:GetService("Workspace")
+
+    local Camera = Workspace:FindFirstChild("CurrentCamera")
+    if not Camera then return nil end
+
+    local LocalPlayer = game:GetService("Players").LocalPlayer
+    if not LocalPlayer then return nil end
+    
+    local RayParams = RaycastParams.new()
+    local RayFilterDescendants = {}
+    
+    if Workspace:FindFirstChild("Baseplate") then
+        table.insert(RayFilterDescendants, Workspace:FindFirstChild("Baseplate"))
+    end
+    if Workspace:FindFirstChild("TerrainBlocks") then
+        table.insert(RayFilterDescendants, Workspace:FindFirstChild("TerrainBlocks"))
+    end
+    if Workspace:FindFirstChild("Blocks") then
+        table.insert(RayFilterDescendants, Workspace:FindFirstChild("Blocks"))
+    end
+    
+    RayParams.FilterDescendantsInstances = RayFilterDescendants
+    RayParams.FilterType = Enum.RaycastFilterType.Include
+    
+    local MouseLocation = UserInputService:GetMouseLocation()
+    local Ray = Camera:ViewportPointToRay(MouseLocation.X, MouseLocation.Y)
+    local RaycastResult = Workspace:Raycast(Ray.Origin, Ray.Direction * 2048, RayParams)
+    
+    return RaycastResult
 end
 
 return CFrameUtilities
