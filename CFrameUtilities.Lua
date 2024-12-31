@@ -87,19 +87,15 @@ function CFrameUtilities.CastRay()
     
     local RayParams = RaycastParams.new()
     local RayFilterDescendants = {}
-    
-    if Workspace:FindFirstChild("Baseplate") then
-        table.insert(RayFilterDescendants, Workspace:FindFirstChild("Baseplate"))
-    end
-    if Workspace:FindFirstChild("TerrainBlocks") then
-        table.insert(RayFilterDescendants, Workspace:FindFirstChild("TerrainBlocks"))
-    end
-    if Workspace:FindFirstChild("Blocks") then
-        table.insert(RayFilterDescendants, Workspace:FindFirstChild("Blocks"))
+
+    for _,Player in ipairs(game:GetService("Players"):GetPlayers()) do
+        if Player.Character then
+            table.insert(RayFilterDescendants, Player.Character)
+        end
     end
     
     RayParams.FilterDescendantsInstances = RayFilterDescendants
-    RayParams.FilterType = Enum.RaycastFilterType.Include
+    RayParams.FilterType = Enum.RaycastFilterType.Exclude
     
     local MouseLocation = UserInputService:GetMouseLocation()
     local Ray = Camera:ViewportPointToRay(MouseLocation.X, MouseLocation.Y)
