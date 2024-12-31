@@ -80,7 +80,6 @@ function CFrameUtilities.CastRay()
    local Workspace = game:GetService("Workspace") 
    local Camera = Workspace.CurrentCamera
    local LocalPlayer = game:GetService("Players").LocalPlayer
-   if not LocalPlayer then return nil end
    
    local RayParams = RaycastParams.new()
    local RayFilterDescendants = {}
