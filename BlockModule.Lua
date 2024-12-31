@@ -27,6 +27,10 @@ local function EquipTool(ToolName)
 end
 
 local function FindNearbyBlock(TargetCFrame)
+    if not TargetCFrame or typeof(TargetCFrame) ~= "CFrame" then
+        return nil
+    end
+    
     local OverlapParams = OverlapParams.new()
     local FilterDescendants = {}
 
@@ -44,16 +48,15 @@ local function FindNearbyBlock(TargetCFrame)
 
     OverlapParams.FilterDescendantsInstances = FilterDescendants
     OverlapParams.FilterType = Enum.RaycastFilterType.Include
-
     local RegionParts = Workspace:GetPartBoundsInBox(TargetCFrame, Vector3.new(5, 5, 5), OverlapParams)
     local AllowedParts = {}
 
     for _, Model in pairs(FilterDescendants) do
-        if Model:IsA("BasePart") then
+        if typeof(Model) == "Instance" then
             table.insert(AllowedParts, Model)
         end
         for _, Descendant in ipairs(Model:GetDescendants()) do
-            if Descendant:IsA("BasePart") then
+            if typeof(Descendant) == "Instance" then
                 table.insert(AllowedParts, Descendant)
             end
         end
@@ -69,6 +72,16 @@ local function FindNearbyBlock(TargetCFrame)
 end
 
 function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame)
+    if not BlockTypeName or typeof(BlockTypeName) ~= "string" then
+        warn("BlockTypeName must be a string")
+        return nil
+    end
+
+    if not BlockCFrame or typeof(BlockCFrame) ~= "CFrame" then
+        warn("BlockCFrame must be a CFrame")
+        return nil
+    end
+    
     EquipTool("BuildingTool")
 
     local NearbyBlock = FindNearbyBlock(BlockCFrame)
@@ -92,16 +105,36 @@ function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame)
     elseif BuildEvent:IsA("RemoteFunction") then
         return BuildEvent:InvokeServer(unpack(Args))
     end
+
     return nil
 end
 
 function BlockModule.DeleteBlock(Block)
+    if not Block or typeof(Block) ~= "Instance" then
+        warn("Block must be an Instance")
+        return
+    end
+    
     EquipTool("DeleteTool")
-
     DeleteEvent:FireServer(Block)
 end
 
 function BlockModule.PaintBlock(Block, Color, EnumMaterial)
+    if not Block or typeof(Block) ~= "Instance" then
+        warn("Block must be an Instance")
+        return
+    end
+
+    if not Color or typeof(Color) ~= "Color3" then
+        warn("Color must be a Color3 value")
+        return
+    end
+
+    if not EnumMaterial or typeof(EnumMaterial) ~= "EnumItem" or EnumMaterial.EnumType ~= Enum.Material then
+        warn("EnumMaterial must be an Enum.Material")
+        return
+    end
+    
     EquipTool("PaintTool")
 
     local Args = {
@@ -110,20 +143,34 @@ function BlockModule.PaintBlock(Block, Color, EnumMaterial)
         [3] = Color,
         [4] = EnumMaterial
     }
+
     DeleteEvent:FireServer(unpack(Args))
 end
 
 function BlockModule.Resize(Block, ResizeVector, ShrinkOrGrow)
-    if ShrinkOrGrow ~= "Shrink" and ShrinkOrGrow ~= "Grow" then return end
+    if not Block or typeof(Block) ~= "Instance" then
+        warn("Block must be an Instance")
+        return
+    end
 
-    EquipTool("ResizeTool")
+    if not ResizeVector or typeof(ResizeVector) ~= "Vector3" then
+        warn("ResizeVector must be a Vector3")
+        return
+    end
+
+    if not ShrinkOrGrow or typeof(ShrinkOrGrow) ~= "string" or (ShrinkOrGrow ~= "Shrink" and ShrinkOrGrow ~= "Grow") then
+        warn("ShrinkOrGrow must be either 'Shrink' or 'Grow'")
+        return
+    end
     
+    EquipTool("ResizeTool")
     local Args = {
         [1] = Block,
         [2] = "Resize",
         [3] = ResizeVector,
         [4] = ShrinkOrGrow
     }
+    
     DeleteEvent:FireServer(unpack(Args))
 end
 
