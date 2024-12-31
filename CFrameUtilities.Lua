@@ -76,30 +76,36 @@ function CFrameUtilities.GetBlocks(StarterCFrame, EndCFrame)
 end
 
 function CFrameUtilities.CastRay()
-    local UserInputService = game:GetService("UserInputService")
-    local Workspace = game:GetService("Workspace")
-
-    local Camera = Workspace.CurrentCamera
-    local LocalPlayer = game:GetService("Players").LocalPlayer
-    if not LocalPlayer then return nil end
-    
-    local RayParams = RaycastParams.new()
-    local RayFilterDescendants = {}
-
-    for _,Player in ipairs(game:GetService("Players"):GetPlayers()) do
-        if Player.Character then
-            table.insert(RayFilterDescendants, Player.Character)
-        end
-    end
-    
-    RayParams.FilterDescendantsInstances = RayFilterDescendants
-    RayParams.FilterType = Enum.RaycastFilterType.Exclude
-    
-    local MouseLocation = UserInputService:GetMouseLocation()
-    local Ray = Camera:ViewportPointToRay(MouseLocation.X, MouseLocation.Y)
-    local RaycastResult = Workspace:Raycast(Ray.Origin, Ray.Direction * 2048, RayParams)
-    
-    return RaycastResult
+   local UserInputService = game:GetService("UserInputService")
+   local Workspace = game:GetService("Workspace") 
+   local Camera = Workspace.CurrentCamera
+   local LocalPlayer = game:GetService("Players").LocalPlayer
+   if not LocalPlayer then return nil end
+   
+   local RayParams = RaycastParams.new()
+   local RayFilterDescendants = {}
+   
+   for _, Player in ipairs(game:GetService("Players"):GetPlayers()) do
+       if Player.Character and Player.Character.Parent then
+           table.insert(RayFilterDescendants, Player.Character)
+       end
+   end
+   
+   RayParams.FilterDescendantsInstances = RayFilterDescendants
+   RayParams.FilterType = Enum.RaycastFilterType.Exclude
+   
+   local MouseLocation = UserInputService:GetMouseLocation()
+   local Ray = Camera:ViewportPointToRay(MouseLocation.X, MouseLocation.Y)
+   
+   local Direction = Ray.Direction.Unit * 2048
+   
+   local RaycastResult = Workspace:Raycast(Ray.Origin, Direction, RayParams)
+   
+   if RaycastResult then
+       return RaycastResult
+   end
+   
+   return nil
 end
 
 return CFrameUtilities
