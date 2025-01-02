@@ -46,27 +46,27 @@ local function EncodeBlock(BlockInstance)
                 RoundToThousandth(BlockInstance.Size.Y),
                 RoundToThousandth(BlockInstance.Size.Z)
             })
+        else
+            table.insert(BlockData, 0)
         end
         
-        local HasColorChanged = not CompareColors(BlockInstance.Color, TemplateBlock.Color)
-        local HasMaterialChanged = BlockInstance.Material ~= TemplateBlock.Material
+        local AppearanceData = {}
         
-        if HasColorChanged or HasMaterialChanged then
-            local AppearanceData = {}
-            if HasColorChanged then
-                AppearanceData[1] = {
-                    math.floor(BlockInstance.Color.R * 255),
-                    math.floor(BlockInstance.Color.G * 255),
-                    math.floor(BlockInstance.Color.B * 255)
-                }
-            end
-            if HasMaterialChanged then
-                AppearanceData[2] = MaterialToCodeDictionary[BlockInstance.Material.Name]
-            end
-            if next(AppearanceData) then
-                table.insert(BlockData, AppearanceData)
-            end
+        if CompareColors(BlockInstance.Color, TemplateBlock.Color) then
+            AppearanceData[1] = 0
+        else
+            AppearanceData[1] = {
+                math.floor(BlockInstance.Color.R * 255),
+                math.floor(BlockInstance.Color.G * 255),
+                math.floor(BlockInstance.Color.B * 255)
+            }
         end
+        
+        if BlockInstance.Material ~= TemplateBlock.Material then
+            AppearanceData[2] = MaterialToCodeDictionary[BlockInstance.Material.Name]
+        end
+        
+        table.insert(BlockData, AppearanceData)
     end
     
     return BlockData
@@ -130,7 +130,7 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         local BlockColor = BlockInstance.Color
         local BlockMaterial = BlockInstance.Material
         
-        if AppearanceData[1] then
+        if AppearanceData[1] and AppearanceData[1] ~= 0 then
             BlockColor = Color3.fromRGB(unpack(AppearanceData[1]))
         end
         
@@ -139,7 +139,7 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         end
         
         if BlockModule and BlockModule.PaintBlock then
-            task.wait(0.02)
+            task.wait()
             BlockModule.PaintBlock(BlockInstance, BlockColor, BlockMaterial)
         end
     end
@@ -174,16 +174,12 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         
         if PlacedBlock then
             if BlockInfo[3] and type(BlockInfo[3]) == "table" then
-                if #BlockInfo[3] == 3 then
-                    local TargetSize = Vector3.new(unpack(BlockInfo[3]))
-                    ResizeBlockToOriginal(PlacedBlock, TargetSize)
-                    
-                    if BlockInfo[4] then
-                        ApplyBlockAppearance(PlacedBlock, BlockInfo[4])
-                    end
-                else
-                    ApplyBlockAppearance(PlacedBlock, BlockInfo[3])
-                end
+                local TargetSize = Vector3.new(unpack(BlockInfo[3]))
+                ResizeBlockToOriginal(PlacedBlock, TargetSize)
+            end
+            
+            if BlockInfo[4] then
+                ApplyBlockAppearance(PlacedBlock, BlockInfo[4])
             end
         end
     end
