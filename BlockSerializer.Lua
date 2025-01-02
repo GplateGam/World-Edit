@@ -2,7 +2,6 @@ local BlockSerializer = {}
 
 local HttpService = game:GetService("HttpService")
 local BlockModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/BlockModule.Lua"))()
-local CFrameUtilities = loadstring(game:HttpGet("https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/CFrameUtilities.Lua"))()
 
 local MaterialList = Enum.Material:GetEnumItems()
 local MaterialToCodeDictionary = {}
