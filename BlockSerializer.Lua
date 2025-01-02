@@ -2,6 +2,7 @@ local BlockSerializer = {}
 
 local HttpService = game:GetService("HttpService")
 local BlockModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/BlockModule.Lua"))()
+local CFrameUtilities = loadstring(game:HttpGet("https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/CFrameUtilities.Lua"))()
 
 local MaterialList = Enum.Material:GetEnumItems()
 local MaterialToCodeDictionary = {}
@@ -14,6 +15,13 @@ end
 
 local function RoundToThousandth(InputValue)
     return math.round(InputValue * 1000) / 1000
+end
+
+local function CompareColors(Color1, Color2)
+    local Threshold = 0.001
+    return math.abs(Color1.R - Color2.R) < Threshold 
+        and math.abs(Color1.G - Color2.G) < Threshold 
+        and math.abs(Color1.B - Color2.B) < Threshold
 end
 
 local function EncodeBlock(BlockInstance)
@@ -41,22 +49,24 @@ local function EncodeBlock(BlockInstance)
             })
         end
         
-        local HasColorChanged = BlockInstance.Color ~= TemplateBlock.Color
+        local HasColorChanged = not CompareColors(BlockInstance.Color, TemplateBlock.Color)
         local HasMaterialChanged = BlockInstance.Material ~= TemplateBlock.Material
         
         if HasColorChanged or HasMaterialChanged then
             local AppearanceData = {}
             if HasColorChanged then
                 AppearanceData[1] = {
-                    RoundToThousandth(BlockInstance.Color.R * 255),
-                    RoundToThousandth(BlockInstance.Color.G * 255),
-                    RoundToThousandth(BlockInstance.Color.B * 255)
+                    math.floor(BlockInstance.Color.R * 255),
+                    math.floor(BlockInstance.Color.G * 255),
+                    math.floor(BlockInstance.Color.B * 255)
                 }
             end
             if HasMaterialChanged then
                 AppearanceData[2] = MaterialToCodeDictionary[BlockInstance.Material.Name]
             end
-            table.insert(BlockData, AppearanceData)
+            if next(AppearanceData) then
+                table.insert(BlockData, AppearanceData)
+            end
         end
     end
     
@@ -115,6 +125,26 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         ResizeAxis(3, TargetSize.Z)
     end
 
+    local function ApplyBlockAppearance(BlockInstance, AppearanceData)
+        if not BlockInstance or not AppearanceData then return end
+        
+        local BlockColor = BlockInstance.Color
+        local BlockMaterial = BlockInstance.Material
+        
+        if AppearanceData[1] then
+            BlockColor = Color3.fromRGB(unpack(AppearanceData[1]))
+        end
+        
+        if AppearanceData[2] then
+            BlockMaterial = CodeToMaterialDictionary[AppearanceData[2]]
+        end
+        
+        if BlockModule and BlockModule.PaintBlock then
+            task.wait(0.02)
+            BlockModule.PaintBlock(BlockInstance, BlockColor, BlockMaterial)
+        end
+    end
+
     table.sort(DecodedBlockData, function(FirstBlock, SecondBlock)
         return FirstBlock[2][2] < SecondBlock[2][2]
     end)
@@ -144,26 +174,16 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         end
         
         if PlacedBlock then
-            if BlockInfo[3] and type(BlockInfo[3]) == "table" and #BlockInfo[3] == 3 then
-                local TargetSize = Vector3.new(unpack(BlockInfo[3]))
-                ResizeBlockToOriginal(PlacedBlock, TargetSize)
-                
-                if BlockInfo[4] then
-                    if BlockInfo[4][1] then
-                        local BlockColor = Color3.fromRGB(unpack(BlockInfo[4][1]))
-                        local BlockMaterial = BlockInfo[4][2] and CodeToMaterialDictionary[BlockInfo[4][2]] or PlacedBlock.Material
-                        BlockModule.PaintBlock(PlacedBlock, BlockColor, BlockMaterial)
-                    elseif BlockInfo[4][2] then
-                        BlockModule.PaintBlock(PlacedBlock, PlacedBlock.Color, CodeToMaterialDictionary[BlockInfo[4][2]])
+            if BlockInfo[3] and type(BlockInfo[3]) == "table" then
+                if #BlockInfo[3] == 3 then
+                    local TargetSize = Vector3.new(unpack(BlockInfo[3]))
+                    ResizeBlockToOriginal(PlacedBlock, TargetSize)
+                    
+                    if BlockInfo[4] then
+                        ApplyBlockAppearance(PlacedBlock, BlockInfo[4])
                     end
-                end
-            elseif BlockInfo[3] and (BlockInfo[3][1] or BlockInfo[3][2]) then
-                if BlockInfo[3][1] then
-                    local BlockColor = Color3.fromRGB(unpack(BlockInfo[3][1]))
-                    local BlockMaterial = BlockInfo[3][2] and CodeToMaterialDictionary[BlockInfo[3][2]] or PlacedBlock.Material
-                    BlockModule.PaintBlock(PlacedBlock, BlockColor, BlockMaterial)
                 else
-                    BlockModule.PaintBlock(PlacedBlock, PlacedBlock.Color, CodeToMaterialDictionary[BlockInfo[3][2]])
+                    ApplyBlockAppearance(PlacedBlock, BlockInfo[3])
                 end
             end
         end
