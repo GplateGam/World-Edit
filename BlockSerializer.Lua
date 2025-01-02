@@ -139,7 +139,6 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         end
         
         if BlockModule and BlockModule.PaintBlock then
-            task.wait()
             BlockModule.PaintBlock(BlockInstance, BlockColor, BlockMaterial)
         end
     end
@@ -174,11 +173,13 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         
         if PlacedBlock then
             if BlockInfo[3] and type(BlockInfo[3]) == "table" then
+                task.wait(0.02)
                 local TargetSize = Vector3.new(unpack(BlockInfo[3]))
                 ResizeBlockToOriginal(PlacedBlock, TargetSize)
             end
             
             if BlockInfo[4] then
+                task.wait(0.02)
                 ApplyBlockAppearance(PlacedBlock, BlockInfo[4])
             end
         end
