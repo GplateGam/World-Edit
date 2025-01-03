@@ -23,6 +23,16 @@ local ReverseEscapeMap = {
     c = "}"
 }
 
+local ProcessedCharacterCount = 0
+
+local function YieldCheck()
+    ProcessedCharacterCount = ProcessedCharacterCount + 1
+    if ProcessedCharacterCount >= 200 then
+        ProcessedCharacterCount = 0
+        task.wait(0)
+    end
+end
+
 local function ConvertValueToString(InputValue)
     local ValueType = type(InputValue)
     
@@ -39,6 +49,7 @@ end
 
 local function EscapeString(InputString)
     return InputString:gsub("([|;=\\{}])", function(MatchCharacter)
+        YieldCheck()
         return EscapeCharacter .. EscapeMap[MatchCharacter]
     end)
 end
@@ -47,6 +58,7 @@ local function EncodeTableValue(InputValue)
     if type(InputValue) == "table" then
         local PairList = {}
         for TableKey, TableValue in next, InputValue do
+            YieldCheck()
             local EncodedKey = EscapeString(ConvertValueToString(TableKey))
             local EncodedValue = EncodeTableValue(TableValue)
             table.insert(PairList, EncodedKey .. KeyValueSeparator .. EncodedValue)
@@ -58,6 +70,7 @@ local function EncodeTableValue(InputValue)
 end
 
 function Module.Encode(InputTable)
+    ProcessedCharacterCount = 0
     if type(InputTable) ~= "table" then
         return EscapeString(ConvertValueToString(InputTable))
     end
@@ -84,6 +97,7 @@ local function DecodeValue(InputString)
 end
 
 function Module.Decode(InputString)
+    ProcessedCharacterCount = 0
     if type(InputString) ~= "string" then
         error("Input must be a string")
     end
@@ -101,6 +115,7 @@ function Module.Decode(InputString)
     local NestedLevel = 0
     
     for Index = 1, #InputString do
+        YieldCheck()
         local CurrentCharacter = InputString:sub(Index, Index)
         
         if IsEscaped then
