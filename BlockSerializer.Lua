@@ -66,25 +66,40 @@ local function CompareColorValues(FirstColor, SecondColor)
         and math.abs(FirstColor.B - SecondColor.B) < BlockColorTolerance
 end
 
+local function GetRotatedDimensions(Block)
+    local CF = Block.CFrame
+    local Size = Block.Size
+    local _, _, _, R11, R12, R13, R21, R22, R23, R31, R32, R33 = CF:components()
+    
+    return Vector3.new(
+        math.abs(R11 * Size.X) + math.abs(R12 * Size.Y) + math.abs(R13 * Size.Z),
+        math.abs(R21 * Size.X) + math.abs(R22 * Size.Y) + math.abs(R23 * Size.Z),
+        math.abs(R31 * Size.X) + math.abs(R32 * Size.Y) + math.abs(R33 * Size.Z)
+    )
+end
+
+local function GetBlockBoundingBox(Block)
+    local RotatedDimensions = GetRotatedDimensions(Block)
+    return {
+        Min = Block.CFrame.Position - RotatedDimensions/2,
+        Max = Block.CFrame.Position + RotatedDimensions/2
+    }
+end
+
 local function AreBlocksAdjacent(FirstBlock, SecondBlock)
     assert(FirstBlock and SecondBlock and FirstBlock.CFrame and SecondBlock.CFrame, "Invalid block parameters")
     
-    local FirstPosition = FirstBlock.CFrame.Position
-    local FirstDimensions = FirstBlock.Size
-    local SecondPosition = SecondBlock.CFrame.Position
-    local SecondDimensions = SecondBlock.Size
+    local FirstBox = GetBlockBoundingBox(FirstBlock)
+    local SecondBox = GetBlockBoundingBox(SecondBlock)
     
-    local PositionDifferenceX = math.abs(FirstPosition.X - SecondPosition.X)
-    local PositionDifferenceY = math.abs(FirstPosition.Y - SecondPosition.Y)
-    local PositionDifferenceZ = math.abs(FirstPosition.Z - SecondPosition.Z)
+    FirstBox.Min -= Vector3.new(BlockPositionTolerance, BlockPositionTolerance, BlockPositionTolerance)
+    FirstBox.Max += Vector3.new(BlockPositionTolerance, BlockPositionTolerance, BlockPositionTolerance)
+    SecondBox.Min -= Vector3.new(BlockPositionTolerance, BlockPositionTolerance, BlockPositionTolerance)
+    SecondBox.Max += Vector3.new(BlockPositionTolerance, BlockPositionTolerance, BlockPositionTolerance)
     
-    local CombinedWidthThreshold = (FirstDimensions.X + SecondDimensions.X) / 2
-    local CombinedHeightThreshold = (FirstDimensions.Y + SecondDimensions.Y) / 2
-    local CombinedDepthThreshold = (FirstDimensions.Z + SecondDimensions.Z) / 2
-    
-    return PositionDifferenceX <= CombinedWidthThreshold + BlockPositionTolerance 
-        and PositionDifferenceY <= CombinedHeightThreshold + BlockPositionTolerance 
-        and PositionDifferenceZ <= CombinedDepthThreshold + BlockPositionTolerance
+    return not (FirstBox.Min.X > SecondBox.Max.X or SecondBox.Min.X > FirstBox.Max.X or
+                FirstBox.Min.Y > SecondBox.Max.Y or SecondBox.Min.Y > FirstBox.Max.Y or
+                FirstBox.Min.Z > SecondBox.Max.Z or SecondBox.Min.Z > FirstBox.Max.Z)
 end
 
 local function FindConnectedBlockCluster(InitialBlock, BlockCollection, ProcessedBlocks)
