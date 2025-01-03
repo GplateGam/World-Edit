@@ -255,38 +255,39 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
 
     local SortedBlockData = SortBlocks(DecodedBlockData)
 
-    local function ResizeBlockToOriginal(BlockInstance, TargetSize)
-        if not BlockInstance or not TargetSize then return end
-        
-        local CurrentSize = BlockInstance.Size
-        local function ResizeAxis(AxisIndex)
-            local CurrentValue = (AxisIndex == 1 and CurrentSize.X) or (AxisIndex == 2 and CurrentSize.Y) or CurrentSize.Z
-            local TargetValue = (AxisIndex == 1 and TargetSize.X) or (AxisIndex == 2 and TargetSize.Y) or TargetSize.Z
-            local SizeDifference = TargetValue - CurrentValue
+   local function ResizeBlockToOriginal(BlockInstance, TargetSize)
+		if not BlockInstance then return end
+		local CurrentSize = BlockInstance.Size
 
-            if math.abs(SizeDifference) < 0.001 then return end
+		local function ResizeAxis(AxisIndex, TargetValue)
+			local CurrentValue = (AxisIndex == 1 and CurrentSize.X) or (AxisIndex == 2 and CurrentSize.Y) or CurrentSize.Z
+			local SizeDifference = TargetValue - CurrentValue
 
-            local ResizeDirection
-            if AxisIndex == 1 then
-                ResizeDirection = Vector3.new(SizeDifference, 0, 0)
-            elseif AxisIndex == 2 then
-                ResizeDirection = Vector3.new(0, SizeDifference, 0)
-            else
-                ResizeDirection = Vector3.new(0, 0, SizeDifference)
-            end
+			if SizeDifference ~= 0 then
+				local ResizeDirection
+				if AxisIndex == 1 then
+					ResizeDirection = Vector3.new(SizeDifference, 0, 0)
+				elseif AxisIndex == 2 then
+					ResizeDirection = Vector3.new(0, SizeDifference, 0)
+				else
+					ResizeDirection = Vector3.new(0, 0, SizeDifference)
+				end
 
-            if BlockModule and BlockModule.ResizeBlock then
-                local ResizeAction = SizeDifference > 0 and "Grow" or "Shrink"
-                BlockModule.ResizeBlock(BlockInstance, ResizeDirection, ResizeAction)
-            end
-        end
+				local ResizeAction = SizeDifference > 0 and "Grow" or "Shrink"
 
-        ResizeAxis(1)
-        task.wait(0.01)
-        ResizeAxis(2)
-        task.wait(0.01)
-        ResizeAxis(3)
-    end
+				if BlockModule and BlockModule.ResizeBlock then
+					BlockModule.ResizeBlock(BlockInstance, ResizeDirection * 0.5, ResizeAction)
+					BlockModule.ResizeBlock(BlockInstance, ResizeDirection * -0.5, ResizeAction)
+				else
+					warn("BlockModule.ResizeBlock not found")
+				end
+			end
+		end
+
+		ResizeAxis(1, TargetSize.X)
+		ResizeAxis(2, TargetSize.Y)
+		ResizeAxis(3, TargetSize.Z)
+	end
 
     local function ApplyBlockAppearance(BlockInstance, AppearanceData)
         if not BlockInstance or not AppearanceData then return end
@@ -321,6 +322,7 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         end
 
         local BlockPlaced = false
+        
         local function Cleanup()
             if ChildAddedConnection then
                 ChildAddedConnection:Disconnect()
