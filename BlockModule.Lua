@@ -149,48 +149,73 @@ function BlockModule.PaintBlock(Block, Color, EnumMaterial)
     DeleteEvent:FireServer(unpack(Args))
 end
 
-function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow)
-    if not Block or typeof(Block) ~= "Instance" then
-        warn("Block must be an Instance")
-        return
-    end
+function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow, Mode)
+   if not Block or typeof(Block) ~= "Instance" then
+       warn("Block must be an Instance")
+       return
+   end
+   if Block:GetAttribute("FakeBlock") then
+       return
+   end
+   if not ResizeVector or typeof(ResizeVector) ~= "Vector3" then
+       warn("ResizeVector must be a Vector3")
+       return
+   end
+   if Mode == "Add" and (not ShrinkOrGrow or typeof(ShrinkOrGrow) ~= "string" or (ShrinkOrGrow ~= "Shrink" and ShrinkOrGrow ~= "Grow")) then
+       warn("ShrinkOrGrow must be either 'Shrink' or 'Grow' when Mode is 'Add'")
+       return
+   end
+   if not Mode or typeof(Mode) ~= "string" or (Mode ~= "Add" and Mode ~= "Set") then
+       warn("Mode must be either 'Add' or 'Set'")
+       return
+   end
 
-    if Block:GetAttribute("FakeBlock") then
-        return
-    end
-
-    if not ResizeVector or typeof(ResizeVector) ~= "Vector3" then
-        warn("ResizeVector must be a Vector3")
-        return
-    end
-
-    if not ShrinkOrGrow or typeof(ShrinkOrGrow) ~= "string" or (ShrinkOrGrow ~= "Shrink" and ShrinkOrGrow ~= "Grow") then
-        warn("ShrinkOrGrow must be either 'Shrink' or 'Grow'")
-        return
-    end
-
-    EquipTool("ResizeTool")
-
-    local Axes = {"X", "Y", "Z"}
-    for _, Axis in ipairs(Axes) do
-        local AxisValue = ResizeVector[Axis]
-        if AxisValue ~= 0 then
-            local ResizeAxisVector = Vector3.new(
-                Axis == "X" and AxisValue or 0,
-                Axis == "Y" and AxisValue or 0,
-                Axis == "Z" and AxisValue or 0
-            )
-            
-            local Args = {
-                [1] = Block,
-                [2] = "Resize",
-                [3] = ResizeAxisVector,
-                [4] = ShrinkOrGrow
-            }
-
-            DeleteEvent:FireServer(unpack(Args))
-        end
-    end
+   EquipTool("ResizeTool")
+   
+   if Mode == "Set" then
+       local CurrentSize = Block.Size
+       local DifferenceVector = ResizeVector - CurrentSize
+       
+       local Axes = {"X", "Y", "Z"}
+       for _, Axis in ipairs(Axes) do
+           local Difference = DifferenceVector[Axis]
+           if Difference ~= 0 then
+               local AbsDifference = math.abs(Difference)
+               local ResizeMode = Difference > 0 and "Grow" or "Shrink"
+               local AxisValue = (Difference < 0) and -AbsDifference or AbsDifference
+               
+               local Args = {
+                   [1] = Block,
+                   [2] = "Resize",
+                   [3] = Vector3.new(
+                       Axis == "X" and AxisValue or 0,
+                       Axis == "Y" and AxisValue or 0,
+                       Axis == "Z" and AxisValue or 0
+                   ),
+                   [4] = ResizeMode
+               }
+               DeleteEvent:FireServer(unpack(Args))
+           end
+       end
+   else
+       local Axes = {"X", "Y", "Z"}
+       for _, Axis in ipairs(Axes) do
+           local AxisValue = ResizeVector[Axis]
+           if AxisValue ~= 0 then
+               local Args = {
+                   [1] = Block,
+                   [2] = "Resize",
+                   [3] = Vector3.new(
+                       Axis == "X" and AxisValue or 0,
+                       Axis == "Y" and AxisValue or 0,
+                       Axis == "Z" and AxisValue or 0
+                   ),
+                   [4] = ShrinkOrGrow
+               }
+               DeleteEvent:FireServer(unpack(Args))
+           end
+       end
+   end
 end
 
 return BlockModule
