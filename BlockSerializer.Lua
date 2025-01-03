@@ -9,6 +9,16 @@ local BlockAppearanceInterval = 0.01
 local BlockPositionTolerance = 0.01
 local BlockColorTolerance = 0.001
 
+local DirectionVectors = {}
+
+for X = -1, 1 do
+    for Y = -1, 1 do
+        for Z = -1, 1 do
+            table.insert(DirectionVectors, Vector3.new(X, Y, Z))
+        end
+    end
+end
+
 local function RequireExternalModule(ModuleUrl, FallbackModule)
     local LoadSuccess, ModuleResult = pcall(function()
         return loadstring(game:HttpGet(ModuleUrl))()
@@ -249,6 +259,41 @@ function BlockSerializer.SerializeBlocks(BlockCollection)
     return DataSerializer.Encode(SerializedStructure)
 end
 
+local function FindDirectionVector(BlockCFrame, TargetDimensions, TemplateBlock, BlockData)
+    for _, DirectionVector in pairs(DirectionVectors) do
+        local Offset = DirectionVector * (TargetDimensions / 2) - DirectionVector * (TemplateBlock.Size / 2)
+        local FinalCFrame = BlockCFrame * CFrame.new(Offset)
+        for _, Block in pairs(BlockData) do
+            if AreBlocksAdjacent({["Size"] = TemplateBlock.Size, ["CFrame"] = FinalCFrame}, Block) then
+                return true, DirectionVector
+            end
+        end
+    end
+    return false, nil
+end
+
+local function ResizeBlockWithDirection(Block, TargetDimensions, TemplateBlock, DirectionVector)
+    local SizeDifference = TargetDimensions - TemplateBlock.Size
+    
+    if SizeDifference.X ~= 0 then
+        local ResizeMode = SizeDifference.X < 0 and "Shrink" or "Grow"
+        local ResizeVector = Vector3.new(math.abs(SizeDifference.X), 0, 0)
+        BlockManipulator.ResizeBlock(Block, ResizeVector, "Add", ResizeMode)
+    end
+    
+    if SizeDifference.Y ~= 0 then
+        local ResizeMode = SizeDifference.Y < 0 and "Shrink" or "Grow"
+        local ResizeVector = Vector3.new(0, math.abs(SizeDifference.Y), 0)
+        BlockManipulator.ResizeBlock(Block, ResizeVector, "Add", ResizeMode)
+    end
+    
+    if SizeDifference.Z ~= 0 then
+        local ResizeMode = SizeDifference.Z < 0 and "Shrink" or "Grow"
+        local ResizeVector = Vector3.new(0, 0, math.abs(SizeDifference.Z))
+        BlockManipulator.ResizeBlock(Block, ResizeVector, "Add", ResizeMode)
+    end
+end
+
 function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
     assert(SerializedData, "Serialized data cannot be nil")
     PlacementInterval = PlacementInterval or DefaultPlacementInterval
@@ -284,16 +329,23 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
         for _, Block in ipairs(SortedBlocks) do
             local TargetTransform = Block.CFrame
             local TargetDimensions = Block.Size
+
             local TemplateBlock = ReplicatedStorage.Blocks:FindFirstChild(Block.Type)
             if not TemplateBlock then return end
             local BlockTemplateSize = TemplateBlock.Size
+
+            local HasAdjacent, DirectionVector = FindDirectionVector(TargetTransform, TargetDimensions, TemplateBlock, SortedBlocks)
+            if not (HasAdjacent and DirectionVector) then continue end
+            
+            local Offset = DirectionVector * (TargetDimensions / 2) - DirectionVector * (BlockTemplateSize / 2)
+            local AdjustedTransform = TargetTransform * CFrame.new(Offset)
             
             local PlacedBlock
             local BlockAddedConnection
             local PlacementCompleted = false
             
             BlockAddedConnection = workspace.Blocks.ChildAdded:Connect(function(NewBlock)
-                if NewBlock.CFrame == TargetTransform then
+                if NewBlock.CFrame == AdjustedTransform then
                     PlacedBlock = NewBlock
                     PlacementCompleted = true
                     BlockAddedConnection:Disconnect()
@@ -302,9 +354,9 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
             
             local PlacementSuccess = pcall(function()
                 if BlockTemplateSize then
-                    BlockManipulator.PlaceBlock(Block.Type, TargetTransform, BlockTemplateSize + Vector3.new(2,2,2))
+                    BlockManipulator.PlaceBlock(Block.Type, AdjustedTransform, BlockTemplateSize + Vector3.new(2,2,2))
                 else
-                    BlockManipulator.PlaceBlock(Block.Type, TargetTransform)
+                    BlockManipulator.PlaceBlock(Block.Type, AdjustedTransform)
                 end
             end)
             
@@ -322,14 +374,15 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
             
             if PlacedBlock then
                 if TargetDimensions and PlacedBlock.Size ~= TargetDimensions then
-                    task.wait(BlockResizeInterval)
-                    pcall(function()
-                        BlockManipulator.ResizeBlock(PlacedBlock, TargetDimensions, "Set")
-                    end)
+                    local HasAdjacent, DirectionVector = FindDirectionVector(TargetTransform, TargetDimensions, TemplateBlock, SortedBlocks)
+                    if HasAdjacent and DirectionVector then
+                        task.wait(BlockResizeInterval)
+                        ResizeBlockWithDirection(PlacedBlock, TargetDimensions, TemplateBlock, DirectionVector)
+                    end
                 end
                 
                 local BlockData = Block.Data
-               if BlockData[4] then
+                if BlockData[4] then
                     task.wait(BlockAppearanceInterval)
                     pcall(function()
                         local ShouldPaint = false
