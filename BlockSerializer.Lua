@@ -417,7 +417,7 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
         end
 
         local BlockPlaced = false
-        local Timeout = 5
+        local Timeout = 0.2
 
         local function Cleanup()
             if ChildAddedConnection then
