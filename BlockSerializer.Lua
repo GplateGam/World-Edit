@@ -321,7 +321,7 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
             end
             
             if PlacedBlock then
-                if TargetDimensions then
+                if TargetDimensions and PlacedBlock.Size ~= TargetDimensions then
                     task.wait(BlockResizeInterval)
                     pcall(function()
                         BlockManipulator.ResizeBlock(PlacedBlock, TargetDimensions, "Set")
