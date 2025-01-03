@@ -4,8 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlacementTimeoutDuration = 0.2
 local DefaultPlacementInterval = 0.07
-local BlockResizeInterval = 0.01
-local BlockAppearanceInterval = 0.01
+local BlockResizeInterval = 0.001
+local BlockAppearanceInterval = 0.001
 local BlockPositionTolerance = 0.01
 local BlockColorTolerance = 0.001
 
