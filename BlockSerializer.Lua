@@ -1,10 +1,6 @@
 local BlockSerializer = {}
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-if not ReplicatedStorage then
-    error("Failed to get ReplicatedStorage")
-    return
-end
 
 local BlockModule
 local Success, Result = pcall(function()
