@@ -149,7 +149,7 @@ function BlockModule.PaintBlock(Block, Color, EnumMaterial)
     DeleteEvent:FireServer(unpack(Args))
 end
 
-function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow, Mode)
+function BlockModule.ResizeBlock(Block, ResizeVector, Mode, ShrinkOrGrow)
    if not Block or typeof(Block) ~= "Instance" then
        warn("Block must be an Instance")
        return
@@ -182,19 +182,22 @@ function BlockModule.ResizeBlock(Block, ResizeVector, ShrinkOrGrow, Mode)
            if Difference ~= 0 then
                local AbsDifference = math.abs(Difference)
                local ResizeMode = Difference > 0 and "Grow" or "Shrink"
-               local AxisValue = (Difference < 0) and -AbsDifference or AbsDifference
                
-               local Args = {
-                   [1] = Block,
-                   [2] = "Resize",
-                   [3] = Vector3.new(
-                       Axis == "X" and AxisValue or 0,
-                       Axis == "Y" and AxisValue or 0,
-                       Axis == "Z" and AxisValue or 0
-                   ),
-                   [4] = ResizeMode
-               }
-               DeleteEvent:FireServer(unpack(Args))
+               for _, Multiplier in ipairs({0.5, -0.5}) do
+                   local AxisValue = AbsDifference * Multiplier
+                   
+                   local Args = {
+                       [1] = Block,
+                       [2] = "Resize",
+                       [3] = Vector3.new(
+                           Axis == "X" and AxisValue or 0,
+                           Axis == "Y" and AxisValue or 0,
+                           Axis == "Z" and AxisValue or 0
+                       ),
+                       [4] = ResizeMode
+                   }
+                   DeleteEvent:FireServer(unpack(Args))
+               end
            end
        end
    else
