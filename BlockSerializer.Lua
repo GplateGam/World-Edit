@@ -324,20 +324,7 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
                 if TargetDimensions then
                     task.wait(BlockResizeInterval)
                     pcall(function()
-                        local CurrentDimensions = PlacedBlock.Size
-                        for Axis = 1, 3 do
-                            local DimensionDifference = TargetDimensions[Axis] - CurrentDimensions[Axis]
-                            if DimensionDifference ~= 0 then
-                                local ResizeDirection = Vector3.new(
-                                    Axis == 1 and DimensionDifference or 0,
-                                    Axis == 2 and DimensionDifference or 0,
-                                    Axis == 3 and DimensionDifference or 0
-                                )
-                                local ResizeAction = DimensionDifference > 0 and "Grow" or "Shrink"
-                                BlockManipulator.ResizeBlock(PlacedBlock, ResizeDirection * 0.5, ResizeAction)
-                                BlockManipulator.ResizeBlock(PlacedBlock, ResizeDirection * -0.5, ResizeAction)
-                            end
-                        end
+                        BlockManipulator.ResizeBlock(PlacedBlock, TargetDimensions, "Set")
                     end)
                 end
                 
