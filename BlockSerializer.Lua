@@ -309,8 +309,7 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
 
     for _, BlockInfo in pairs(SortedBlockData) do
         local PlacedBlock = nil
-        local ChildAddedConnection
-        local TimeoutConnection
+        local ChildAddedConnection = nil
 
         local BlockPosition = Vector3.new(BlockInfo[2][1], BlockInfo[2][2], BlockInfo[2][3])
         local BlockRotation = Vector3.new(BlockInfo[2][4], BlockInfo[2][5], BlockInfo[2][6])
@@ -327,23 +326,12 @@ function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
                 ChildAddedConnection:Disconnect()
                 ChildAddedConnection = nil
             end
-            if TimeoutConnection then
-                TimeoutConnection:Disconnect()
-                TimeoutConnection = nil
-            end
         end
 
         ChildAddedConnection = workspace.Blocks.ChildAdded:Connect(function(NewBlock)
             if NewBlock.CFrame == TargetTransform then
                 PlacedBlock = NewBlock
                 BlockPlaced = true
-                Cleanup()
-            end
-        end)
-
-        TimeoutConnection = task.delay(1, function()
-            if not BlockPlaced then
-                warn("Block placement timed out:", BlockInfo[1])
                 Cleanup()
             end
         end)
