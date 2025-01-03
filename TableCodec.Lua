@@ -90,7 +90,7 @@ local function RestoreValue(InputString)
 end
 
 local function DecodeValue(InputString)
-    if InputString:sub(1, 1) == TableStart then
+    if InputString:sub(1, 1) == TableStart and InputString:sub(-1) == TableEnd then
         return Module.Decode(InputString:sub(2, -2))
     end
     return RestoreValue(InputString)
@@ -98,6 +98,7 @@ end
 
 function Module.Decode(InputString)
     ProcessedCharacterCount = 0
+    
     if type(InputString) ~= "string" then
         error("Input must be a string")
     end
@@ -113,6 +114,7 @@ function Module.Decode(InputString)
     local IsEscaped = false
     local IsKeyBuilding = true
     local NestedLevel = 0
+    local LastChar = ""
     
     for Index = 1, #InputString do
         YieldCheck()
@@ -129,11 +131,23 @@ function Module.Decode(InputString)
         elseif CurrentCharacter == EscapeCharacter then
             IsEscaped = true
         elseif CurrentCharacter == TableStart then
-            NestedLevel = NestedLevel + 1
-            CurrentPart = CurrentPart .. CurrentCharacter
+            if LastChar == KeyValueSeparator or LastChar == PairSeparator or LastChar == "" or LastChar == TableStart then
+                NestedLevel = NestedLevel + 1
+                CurrentPart = CurrentPart .. CurrentCharacter
+            else
+                CurrentPart = CurrentPart .. CurrentCharacter
+            end
         elseif CurrentCharacter == TableEnd then
             NestedLevel = NestedLevel - 1
             CurrentPart = CurrentPart .. CurrentCharacter
+            if NestedLevel == 0 and not IsKeyBuilding then
+                CurrentValue = CurrentPart
+                local FinalKey = RestoreValue(CurrentKey)
+                local FinalValue = DecodeValue(CurrentValue)
+                ResultTable[FinalKey] = FinalValue
+                CurrentPart = ""
+                IsKeyBuilding = true
+            end
         elseif NestedLevel > 0 then
             CurrentPart = CurrentPart .. CurrentCharacter
         elseif CurrentCharacter == KeyValueSeparator and IsKeyBuilding then
@@ -141,26 +155,25 @@ function Module.Decode(InputString)
             CurrentPart = ""
             IsKeyBuilding = false
         elseif CurrentCharacter == PairSeparator and NestedLevel == 0 then
-            CurrentValue = CurrentPart
-            local FinalKey = RestoreValue(CurrentKey)
-            local FinalValue = DecodeValue(CurrentValue)
-            ResultTable[FinalKey] = FinalValue
+            if not IsKeyBuilding then
+                CurrentValue = CurrentPart
+                local FinalKey = RestoreValue(CurrentKey)
+                local FinalValue = DecodeValue(CurrentValue)
+                ResultTable[FinalKey] = FinalValue
+            end
             CurrentPart = ""
             IsKeyBuilding = true
         else
             CurrentPart = CurrentPart .. CurrentCharacter
         end
+        LastChar = CurrentCharacter
     end
     
-    if #CurrentPart > 0 then
-        if IsKeyBuilding then
-            error("Incomplete key-value pair")
-        else
-            CurrentValue = CurrentPart
-            local FinalKey = RestoreValue(CurrentKey)
-            local FinalValue = DecodeValue(CurrentValue)
-            ResultTable[FinalKey] = FinalValue
-        end
+    if #CurrentPart > 0 and not IsKeyBuilding then
+        CurrentValue = CurrentPart
+        local FinalKey = RestoreValue(CurrentKey)
+        local FinalValue = DecodeValue(CurrentValue)
+        ResultTable[FinalKey] = FinalValue
     end
     
     return ResultTable
