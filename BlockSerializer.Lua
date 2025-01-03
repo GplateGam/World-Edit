@@ -2,484 +2,350 @@ local BlockSerializer = {}
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local BlockModule
-local Success, Result = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/BlockModule.Lua"))()
-end)
+local PlacementTimeoutDuration = 0.2
+local DefaultPlacementInterval = 0.07
+local BlockResizeInterval = 0.01
+local BlockAppearanceInterval = 0.01
+local BlockPositionTolerance = 0.01
+local BlockColorTolerance = 0.001
 
-if Success then
-    BlockModule = Result
-else
-    warn("Failed to load BlockModule:", Result)
-    BlockModule = {
+local function RequireExternalModule(ModuleUrl, FallbackModule)
+    local LoadSuccess, ModuleResult = pcall(function()
+        return loadstring(game:HttpGet(ModuleUrl))()
+    end)
+    
+    if LoadSuccess then
+        return ModuleResult
+    else
+        warn(string.format("Failed to load module from %s: %s", ModuleUrl, ModuleResult))
+        return FallbackModule
+    end
+end
+
+local BlockManipulator = RequireExternalModule(
+    "https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/BlockModule.Lua",
+    {
         PlaceBlock = function() warn("BlockModule not loaded - PlaceBlock unavailable") end,
         ResizeBlock = function() warn("BlockModule not loaded - ResizeBlock unavailable") end,
         PaintBlock = function() warn("BlockModule not loaded - PaintBlock unavailable") end
     }
+)
+
+local DataSerializer = RequireExternalModule(
+    "https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/TableCodec.Lua"
+)
+
+local MaterialCollection = Enum.Material:GetEnumItems()
+local MaterialNameToIndex = {}
+local MaterialIndexToType = {}
+
+for MaterialIndex, MaterialItem in ipairs(MaterialCollection) do
+    MaterialNameToIndex[MaterialItem.Name] = MaterialIndex
+    MaterialIndexToType[MaterialIndex] = MaterialItem
 end
 
-local TableCodec
-local Success2, Result2 = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/GplateGam/World-Edit-Elected-Admin/refs/heads/main/TableCodec.Lua"))()
-end)
-
-if Success2 then
-    TableCodec = Result2
-else
-    warn("Failed to load TableCodec:", Result2)
-    return
+local function RoundValueToThousandth(InputNumber)
+    assert(type(InputNumber) == "number", "Expected number input")
+    return math.round(InputNumber * 1000) / 1000
 end
 
-local MaterialList = Enum.Material:GetEnumItems()
-local MaterialToCodeDictionary = {}
-local CodeToMaterialDictionary = {}
-
-for MaterialIndex, MaterialItem in ipairs(MaterialList) do
-    MaterialToCodeDictionary[MaterialItem.Name] = MaterialIndex
-    CodeToMaterialDictionary[MaterialIndex] = MaterialItem
+local function CompareColorValues(FirstColor, SecondColor)
+    assert(FirstColor and SecondColor, "Colors cannot be nil")
+    return math.abs(FirstColor.R - SecondColor.R) < BlockColorTolerance 
+        and math.abs(FirstColor.G - SecondColor.G) < BlockColorTolerance 
+        and math.abs(FirstColor.B - SecondColor.B) < BlockColorTolerance
 end
 
-local function RoundToThousandth(InputValue)
-    if type(InputValue) ~= "number" then
-        warn("RoundToThousandth received non-number input:", InputValue)
-        return 0
-    end
-    return math.round(InputValue * 1000) / 1000
+local function AreBlocksAdjacent(FirstBlock, SecondBlock)
+    assert(FirstBlock and SecondBlock and FirstBlock.CFrame and SecondBlock.CFrame, "Invalid block parameters")
+    
+    local FirstPosition = FirstBlock.CFrame.Position
+    local FirstDimensions = FirstBlock.Size
+    local SecondPosition = SecondBlock.CFrame.Position
+    local SecondDimensions = SecondBlock.Size
+    
+    local PositionDifferenceX = math.abs(FirstPosition.X - SecondPosition.X)
+    local PositionDifferenceY = math.abs(FirstPosition.Y - SecondPosition.Y)
+    local PositionDifferenceZ = math.abs(FirstPosition.Z - SecondPosition.Z)
+    
+    local CombinedWidthThreshold = (FirstDimensions.X + SecondDimensions.X) / 2
+    local CombinedHeightThreshold = (FirstDimensions.Y + SecondDimensions.Y) / 2
+    local CombinedDepthThreshold = (FirstDimensions.Z + SecondDimensions.Z) / 2
+    
+    return PositionDifferenceX <= CombinedWidthThreshold + BlockPositionTolerance 
+        and PositionDifferenceY <= CombinedHeightThreshold + BlockPositionTolerance 
+        and PositionDifferenceZ <= CombinedDepthThreshold + BlockPositionTolerance
 end
 
-local function CompareColors(ColorA, ColorB)
-    if not ColorA or not ColorB then
-        warn("CompareColors received nil color")
-        return false
-    end
-    local Threshold = 0.001
-    return math.abs(ColorA.R - ColorB.R) < Threshold 
-        and math.abs(ColorA.G - ColorB.G) < Threshold 
-        and math.abs(ColorA.B - ColorB.B) < Threshold
-end
-
-local function AreBlocksTouching(BlockA, BlockB)
-    if not BlockA or not BlockB or not BlockA.CFrame or not BlockB.CFrame then
-        warn("AreBlocksTouching received invalid blocks")
-        return false
+local function FindConnectedBlockCluster(InitialBlock, BlockCollection, ProcessedBlocks)
+    local BlockCluster = {InitialBlock}
+    ProcessedBlocks[InitialBlock] = true
+    local CurrentIndex = 1
+    
+    while CurrentIndex <= #BlockCluster do
+        local ActiveBlock = BlockCluster[CurrentIndex]
+        for _, CandidateBlock in ipairs(BlockCollection) do
+            if not ProcessedBlocks[CandidateBlock] and AreBlocksAdjacent(ActiveBlock, CandidateBlock) then
+                table.insert(BlockCluster, CandidateBlock)
+                ProcessedBlocks[CandidateBlock] = true
+            end
+        end
+        CurrentIndex = CurrentIndex + 1
     end
     
-    local PosA = BlockA.CFrame.Position
-    local SizeA = BlockA.Size
-    local PosB = BlockB.CFrame.Position
-    local SizeB = BlockB.Size
-    
-    if not PosA or not PosB or not SizeA or not SizeB then
-        return false
-    end
-    
-    local DeltaX = math.abs(PosA.X - PosB.X)
-    local DeltaY = math.abs(PosA.Y - PosB.Y)
-    local DeltaZ = math.abs(PosA.Z - PosB.Z)
-    local MinX = (SizeA.X + SizeB.X) / 2
-    local MinY = (SizeA.Y + SizeB.Y) / 2
-    local MinZ = (SizeA.Z + SizeB.Z) / 2
-    local Tolerance = 0.01
-    return DeltaX <= MinX + Tolerance and DeltaY <= MinY + Tolerance and DeltaZ <= MinZ + Tolerance
+    return BlockCluster
 end
 
-local function FindGroups(Blocks)
-    if not Blocks or type(Blocks) ~= "table" then
-        warn("FindGroups received invalid input")
-        return {}
+local function IdentifyBlockClusters(BlockCollection)
+    assert(type(BlockCollection) == "table", "Expected table of blocks")
+    
+    local BlockClusters = {}
+    local ProcessedBlocks = {}
+    
+    for _, Block in ipairs(BlockCollection) do
+        if not ProcessedBlocks[Block] then
+            local NewCluster = FindConnectedBlockCluster(Block, BlockCollection, ProcessedBlocks)
+            if #NewCluster > 0 then
+                table.insert(BlockClusters, NewCluster)
+            end
+        end
     end
+    
+    return BlockClusters
+end
 
-    local Groups = {}
-    local Visited = {}
-
-    local function FindConnectedBlocks(Block)
-        if not Block then return {} end
+local function SortBlockCluster(BlockCluster)
+    local OrderedBlocks = {}
+    local CurrentBlock = BlockCluster[1]
+    local ProcessedBlocks = {}
+    local ProcessingIndex = 1
+    
+    while ProcessingIndex <= #BlockCluster and CurrentBlock do
+        ProcessedBlocks[CurrentBlock] = true
+        CurrentBlock.ProcessingIndex = ProcessingIndex
+        table.insert(OrderedBlocks, CurrentBlock)
         
-        local Group = {Block}
-        Visited[Block] = true
-        local Index = 1
+        local CandidateBlocks = {}
+        for _, Block in ipairs(BlockCluster) do
+            if not ProcessedBlocks[Block] then
+                for _, ProcessedBlock in ipairs(OrderedBlocks) do
+                    if AreBlocksAdjacent(Block, ProcessedBlock) then
+                        table.insert(CandidateBlocks, Block)
+                        break
+                    end
+                end
+            end
+        end
         
-        while Index <= #Group do
-            local CurrentBlock = Group[Index]
-            if CurrentBlock then
-                for _, OtherBlock in ipairs(Blocks) do
-                    if OtherBlock and not Visited[OtherBlock] and AreBlocksTouching(CurrentBlock, OtherBlock) then
-                        table.insert(Group, OtherBlock)
-                        Visited[OtherBlock] = true
-                    end
-                end
-            end
-            Index = Index + 1
-        end
-        return Group
+        table.sort(CandidateBlocks, function(FirstBlock, SecondBlock)
+            local FirstPosition = FirstBlock.CFrame.Position
+            local SecondPosition = SecondBlock.CFrame.Position
+            local ReferencePosition = CurrentBlock.CFrame.Position
+            
+            local FirstTouching = AreBlocksAdjacent(FirstBlock, CurrentBlock)
+            local SecondTouching = AreBlocksAdjacent(SecondBlock, CurrentBlock)
+            
+            if FirstTouching ~= SecondTouching then return FirstTouching end
+            
+            local FirstMatchesY = math.abs(FirstPosition.Y - ReferencePosition.Y) < BlockPositionTolerance
+            local SecondMatchesY = math.abs(SecondPosition.Y - ReferencePosition.Y) < BlockPositionTolerance
+            
+            if FirstMatchesY ~= SecondMatchesY then return FirstMatchesY end
+            if math.abs(FirstPosition.Y - SecondPosition.Y) > BlockPositionTolerance then return FirstPosition.Y < SecondPosition.Y end
+            
+            return (FirstPosition - ReferencePosition).Magnitude < (SecondPosition - ReferencePosition).Magnitude
+        end)
+        
+        CurrentBlock = CandidateBlocks[1]
+        ProcessingIndex = ProcessingIndex + 1
     end
-
-    for _, Block in ipairs(Blocks) do
-        if Block and not Visited[Block] then
-            local Group = FindConnectedBlocks(Block)
-            if #Group > 0 then
-                table.insert(Groups, Group)
-            end
-        end
-    end
-    return Groups
+    
+    return OrderedBlocks
 end
 
-local function SortBlocks(BlocksData)
-    if not BlocksData or type(BlocksData) ~= "table" then
-        warn("SortBlocks received invalid input")
-        return {}
-    end
-
-    local TempBlocks = {}
-    for _, BlockInfo in ipairs(BlocksData) do
-        if BlockInfo and BlockInfo[2] and #BlockInfo[2] >= 6 then
-            local BlockPosition = Vector3.new(BlockInfo[2][1], BlockInfo[2][2], BlockInfo[2][3])
-            local BlockRotation = Vector3.new(BlockInfo[2][4], BlockInfo[2][5], BlockInfo[2][6])
-            local BlockSize = BlockInfo[3] ~= 0 and Vector3.new(unpack(BlockInfo[3])) or Vector3.new(3, 3, 3)
-
-            local TempBlock = {
-                CFrame = CFrame.new(BlockPosition) * CFrame.Angles(math.rad(BlockRotation.X), math.rad(BlockRotation.Y), math.rad(BlockRotation.Z)),
-                Size = BlockSize,
-                Data = BlockInfo
-            }
-            table.insert(TempBlocks, TempBlock)
-        end
-    end
-
-    local SortedBlocks = {}
-    local Groups = FindGroups(TempBlocks)
-
-    for GroupId, Group in ipairs(Groups) do
-        if #Group > 0 then
-            local LowestBlock = Group[1]
-            for _, Block in ipairs(Group) do
-                if Block.CFrame.Position.Y < LowestBlock.CFrame.Position.Y then
-                    LowestBlock = Block
-                end
-            end
-
-            local ProcessedBlocks = {}
-            local CurrentBlock = LowestBlock
-            local CurrentIndex = 1
-            local Processed = {}
-
-            while CurrentIndex <= #Group and CurrentBlock do
-                Processed[CurrentBlock] = true
-                CurrentBlock.Index = CurrentIndex
-                CurrentBlock.StructureId = GroupId
-                table.insert(ProcessedBlocks, CurrentBlock)
-
-                local Candidates = {}
-                for _, Block in ipairs(Group) do
-                    if Block and not Processed[Block] then
-                        for _, ProcessedBlock in ipairs(ProcessedBlocks) do
-                            if AreBlocksTouching(Block, ProcessedBlock) then
-                                table.insert(Candidates, Block)
-                                break
-                            end
-                        end
-                    end
-                end
-
-                table.sort(Candidates, function(A, B)
-                    if not A or not B or not A.CFrame or not B.CFrame or not CurrentBlock.CFrame then
-                        return false
-                    end
-                    
-                    local PosA = A.CFrame.Position
-                    local PosB = B.CFrame.Position
-                    local PosCurrent = CurrentBlock.CFrame.Position
-                    local ATouchingCurrent = AreBlocksTouching(A, CurrentBlock)
-                    local BTouchingCurrent = AreBlocksTouching(B, CurrentBlock)
-                    
-                    if ATouchingCurrent ~= BTouchingCurrent then
-                        return ATouchingCurrent
-                    end
-                    
-                    local AAtCurrentY = math.abs(PosA.Y - PosCurrent.Y) < 0.01
-                    local BAtCurrentY = math.abs(PosB.Y - PosCurrent.Y) < 0.01
-                    
-                    if AAtCurrentY ~= BAtCurrentY then
-                        return AAtCurrentY
-                    end
-                    
-                    if math.abs(PosA.Y - PosB.Y) > 0.01 then
-                        return PosA.Y < PosB.Y
-                    end
-                    
-                    return (PosA - PosCurrent).Magnitude < (PosB - PosCurrent).Magnitude
-                end)
-
-                if #Candidates > 0 then
-                    CurrentBlock = Candidates[1]
-                else
-                    break
-                end
-                CurrentIndex = CurrentIndex + 1
-            end
-
-            for _, Block in ipairs(ProcessedBlocks) do
-                if Block and Block.Data then
-                    table.insert(SortedBlocks, Block.Data)
-                end
-            end
-        end
-    end
-
-    return SortedBlocks
-end
-
-local function EncodeBlock(BlockInstance)
-    if not BlockInstance then 
-        warn("EncodeBlock received nil instance")
-        return nil 
-    end
-
+local function SerializeBlock(BlockInstance, BlockTypes, SerializedData)
+    assert(BlockInstance and BlockTypes and SerializedData, "Missing required parameters")
+    
     local TemplateBlock = ReplicatedStorage.Blocks:FindFirstChild(BlockInstance.Name)
-    if not TemplateBlock then 
-        warn("Template block not found for:", BlockInstance.Name)
-        return nil 
+    assert(TemplateBlock, "Template block not found: " .. BlockInstance.Name)
+    
+    local BlockTypeIndex
+    for TypeIndex, BlockType in ipairs(BlockTypes) do
+        if BlockType == BlockInstance.Name then
+            BlockTypeIndex = TypeIndex
+            break
+        end
     end
-
-    local BlockData = {BlockInstance.Name}
-
-    if not BlockInstance.Position or not BlockInstance.Rotation then
-        warn("Block missing Position or Rotation:", BlockInstance.Name)
-        return nil
+    
+    if not BlockTypeIndex then
+        table.insert(BlockTypes, BlockInstance.Name)
+        BlockTypeIndex = #BlockTypes
     end
-
+    
+    local BlockEntry = {}
+    table.insert(BlockEntry, BlockTypeIndex)
+    
     local BlockPosition = BlockInstance.Position
     local BlockRotation = BlockInstance.Rotation
-    local BlockTransformData = {
-        RoundToThousandth(BlockPosition.X),
-        RoundToThousandth(BlockPosition.Y),
-        RoundToThousandth(BlockPosition.Z),
-        RoundToThousandth(BlockRotation.X),
-        RoundToThousandth(BlockRotation.Y),
-        RoundToThousandth(BlockRotation.Z)
+    local TransformData = {
+        RoundValueToThousandth(BlockPosition.X),
+        RoundValueToThousandth(BlockPosition.Y),
+        RoundValueToThousandth(BlockPosition.Z),
+        RoundValueToThousandth(BlockRotation.X),
+        RoundValueToThousandth(BlockRotation.Y),
+        RoundValueToThousandth(BlockRotation.Z)
     }
-    table.insert(BlockData, BlockTransformData)
-
-    if BlockInstance.Size ~= TemplateBlock.Size then
-        table.insert(BlockData, {
-            RoundToThousandth(BlockInstance.Size.X),
-            RoundToThousandth(BlockInstance.Size.Y),
-            RoundToThousandth(BlockInstance.Size.Z)
+    table.insert(BlockEntry, TransformData)
+    
+    if BlockInstance.Size == TemplateBlock.Size then
+        table.insert(BlockEntry, 0)
+    else
+        table.insert(BlockEntry, {
+            RoundValueToThousandth(BlockInstance.Size.X),
+            RoundValueToThousandth(BlockInstance.Size.Y),
+            RoundValueToThousandth(BlockInstance.Size.Z)
         })
-    else
-        table.insert(BlockData, 0)
     end
-
-    local AppearanceData = {}
-
-    if CompareColors(BlockInstance.Color, TemplateBlock.Color) then
-        AppearanceData[1] = 0
+    
+    local AppearanceProperties = {}
+    
+    if CompareColorValues(BlockInstance.Color, TemplateBlock.Color) then
+        AppearanceProperties[1] = 0
     else
-        AppearanceData[1] = {
+        AppearanceProperties[1] = {
             math.floor(BlockInstance.Color.R * 255),
             math.floor(BlockInstance.Color.G * 255),
             math.floor(BlockInstance.Color.B * 255)
         }
     end
-
+    
     if BlockInstance.Material ~= TemplateBlock.Material then
-        local MaterialCode = MaterialToCodeDictionary[BlockInstance.Material.Name]
-        if MaterialCode then
-            AppearanceData[2] = MaterialCode
+        local MaterialIndex = MaterialNameToIndex[BlockInstance.Material.Name]
+        if MaterialIndex then
+            AppearanceProperties[2] = MaterialIndex
         end
     end
-
-    table.insert(BlockData, AppearanceData)
-    return BlockData
+    
+    table.insert(BlockEntry, AppearanceProperties)
+    table.insert(SerializedData, BlockEntry)
 end
 
-function BlockSerializer.Encode(InputBlocks)
-    if not InputBlocks then
-        warn("Encode received nil input")
-        return nil
-    end
-
-    local EncodedBlocks = {}
-
-    if typeof(InputBlocks) == "Instance" then
-        local Encoded = EncodeBlock(InputBlocks)
-        if Encoded then
-            table.insert(EncodedBlocks, Encoded)
-        end
+function BlockSerializer.SerializeBlocks(BlockCollection)
+    assert(BlockCollection, "Input blocks cannot be nil")
+    
+    local SerializedStructure = {
+        [1] = {},
+        [2] = {}
+    }
+    
+    if typeof(BlockCollection) == "Instance" then
+        SerializeBlock(BlockCollection, SerializedStructure[1], SerializedStructure[2])
     else
-        for _, BlockInstance in pairs(InputBlocks) do
-            local Encoded = EncodeBlock(BlockInstance)
-            if Encoded then
-                table.insert(EncodedBlocks, Encoded)
-            end
+        for _, Block in pairs(BlockCollection) do
+            SerializeBlock(Block, SerializedStructure[1], SerializedStructure[2])
         end
     end
-
-    return TableCodec.Encode(EncodedBlocks)
+    
+    return DataSerializer.Encode(SerializedStructure)
 end
 
-function BlockSerializer.Decode(EncodedBlockData, PlacementDelay)
-    if not EncodedBlockData then
-        warn("Decode received nil input")
-        return
-    end
-
-    PlacementDelay = PlacementDelay or 0.07
+function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
+    assert(SerializedData, "Serialized data cannot be nil")
+    PlacementInterval = PlacementInterval or DefaultPlacementInterval
     
-    local Success, DecodedBlockData = pcall(function()
-        return TableCodec.Decode(EncodedBlockData)
-    end)
+    local DeserializeSuccess, DeserializedStructure = pcall(DataSerializer.Decode, SerializedData)
+    assert(DeserializeSuccess, "Failed to deserialize block data: " .. tostring(DeserializedStructure))
     
-    if not Success then
-        warn("Failed to decode block data:", DecodedBlockData)
-        return
-    end
-
-    local SortedBlockData = SortBlocks(DecodedBlockData)
-
-    local function ResizeBlockToOriginal(BlockInstance, TargetSize)
-        if not BlockInstance or not TargetSize then return end
-        
-        local CurrentSize = BlockInstance.Size
-        if not CurrentSize then return end
-
-        local function ResizeAxis(AxisIndex, TargetValue)
-            if type(TargetValue) ~= "number" then return end
+    assert(DeserializedStructure[1] and DeserializedStructure[2], "Invalid data structure")
+    local BlockTypes = DeserializedStructure[1]
+    local BlockEntries = DeserializedStructure[2]
+    
+    local TemporaryBlocks = {}
+    for _, BlockEntry in ipairs(BlockEntries) do
+        if BlockEntry and BlockEntry[2] and #BlockEntry[2] >= 6 then
+            local BlockType = BlockTypes[BlockEntry[1]]
+            local Position = Vector3.new(BlockEntry[2][1], BlockEntry[2][2], BlockEntry[2][3])
+            local Rotation = Vector3.new(BlockEntry[2][4], BlockEntry[2][5], BlockEntry[2][6])
+            local Dimensions = BlockEntry[3] ~= 0 and Vector3.new(unpack(BlockEntry[3])) or Vector3.new(3, 3, 3)
             
-            local CurrentValue = (AxisIndex == 1 and CurrentSize.X) or (AxisIndex == 2 and CurrentSize.Y) or CurrentSize.Z
-            local SizeDifference = TargetValue - CurrentValue
-
-            if SizeDifference ~= 0 then
-                local ResizeDirection
-                if AxisIndex == 1 then
-                    ResizeDirection = Vector3.new(SizeDifference, 0, 0)
-                elseif AxisIndex == 2 then
-                    ResizeDirection = Vector3.new(0, SizeDifference, 0)
-                else
-                    ResizeDirection = Vector3.new(0, 0, SizeDifference)
-                end
-
-                local ResizeAction = SizeDifference > 0 and "Grow" or "Shrink"
-
-                if BlockModule and BlockModule.ResizeBlock then
-                    BlockModule.ResizeBlock(BlockInstance, ResizeDirection * 0.5, ResizeAction)
-                    BlockModule.ResizeBlock(BlockInstance, ResizeDirection * -0.5, ResizeAction)
-                else
-                    warn("BlockModule.ResizeBlock not found")
-                end
-            end
-        end
-
-        ResizeAxis(1, TargetSize.X)
-        ResizeAxis(2, TargetSize.Y)
-        ResizeAxis(3, TargetSize.Z)
-    end
-
-    local function ApplyBlockAppearance(BlockInstance, AppearanceData)
-        if not BlockInstance or not AppearanceData then return end
-
-        local BlockColor = BlockInstance.Color
-        local BlockMaterial = BlockInstance.Material
-
-        if AppearanceData[1] and AppearanceData[1] ~= 0 then
-            BlockColor = Color3.fromRGB(unpack(AppearanceData[1]))
-        end
-
-        if AppearanceData[2] then
-            local NewMaterial = CodeToMaterialDictionary[AppearanceData[2]]
-            if NewMaterial then
-                BlockMaterial = NewMaterial
-            end
-        end
-
-        if BlockModule and BlockModule.PaintBlock then
-            BlockModule.PaintBlock(BlockInstance, BlockColor, BlockMaterial)
+            local TemporaryBlock = {
+                CFrame = CFrame.new(Position) * CFrame.Angles(math.rad(Rotation.X), math.rad(Rotation.Y), math.rad(Rotation.Z)),
+                Size = Dimensions,
+                Data = BlockEntry,
+                Type = BlockType
+            }
+            table.insert(TemporaryBlocks, TemporaryBlock)
         end
     end
-
-    for _, BlockInfo in pairs(SortedBlockData) do
-        if not BlockInfo or type(BlockInfo) ~= "table" or not BlockInfo[1] or not BlockInfo[2] then
-            warn("Invalid block data encountered")
-            continue
-        end
-
-        local PlacedBlock = nil
-        local ChildAddedConnection = nil
-
-        local BlockPosition = Vector3.new(BlockInfo[2][1], BlockInfo[2][2], BlockInfo[2][3])
-        local BlockRotation = Vector3.new(BlockInfo[2][4], BlockInfo[2][5], BlockInfo[2][6])
-        local TargetTransform = CFrame.new(BlockPosition) * CFrame.Angles(math.rad(BlockRotation.X), math.rad(BlockRotation.Y), math.rad(BlockRotation.Z))
-        local TargetSize = nil
-
-        if BlockInfo[3] and type(BlockInfo[3]) == "table" and #BlockInfo[3] >= 3 then
-            TargetSize = Vector3.new(unpack(BlockInfo[3]))
-        end
-
-        local BlockPlaced = false
-        local Timeout = 0.2
-
-        local function Cleanup()
-            if ChildAddedConnection then
-                ChildAddedConnection:Disconnect()
-                ChildAddedConnection = nil
-            end
-        end
-
-        local PlacementComplete = false
-        
-        ChildAddedConnection = workspace.Blocks.ChildAdded:Connect(function(NewBlock)
-            if NewBlock.CFrame == TargetTransform then
-                PlacedBlock = NewBlock
-                BlockPlaced = true
-                PlacementComplete = true
-                Cleanup()
-            end
-        end)
-
-        local Success, Error = pcall(function()
-            if TargetSize then
-                BlockModule.PlaceBlock(BlockInfo[1], TargetTransform, TargetSize + Vector3.new(2,2,2))
-            else
-                BlockModule.PlaceBlock(BlockInfo[1], TargetTransform)
-            end
-        end)
-
-        if not Success then
-            warn("Failed to place block:", Error)
-            Cleanup()
-            continue
-        end
-
-        local StartTime = tick()
-        while not PlacementComplete and (tick() - StartTime) < Timeout do
-            task.wait(PlacementDelay)
-        end
-
-        if not PlacementComplete then
-            warn("Block placement timed out")
-            Cleanup()
-            continue
-        end
-
-        if PlacedBlock then
-            if TargetSize then
-                task.wait(0.01)
-                local Success, Error = pcall(function()
-                    ResizeBlockToOriginal(PlacedBlock, TargetSize)
-                end)
-                if not Success then
-                    warn("Failed to resize block:", Error)
+    
+    local BlockClusters = IdentifyBlockClusters(TemporaryBlocks)
+    for _, Cluster in ipairs(BlockClusters) do
+        local SortedBlocks = SortBlockCluster(Cluster)
+        for _, Block in ipairs(SortedBlocks) do
+            local TargetTransform = Block.CFrame
+            local TargetDimensions = Block.Size
+            
+            local PlacedBlock
+            local BlockAddedConnection
+            local PlacementCompleted = false
+            
+            BlockAddedConnection = workspace.Blocks.ChildAdded:Connect(function(NewBlock)
+                if NewBlock.CFrame == TargetTransform then
+                    PlacedBlock = NewBlock
+                    PlacementCompleted = true
+                    BlockAddedConnection:Disconnect()
                 end
+            end)
+            
+            local PlacementSuccess = pcall(function()
+                if TargetDimensions then
+                    BlockManipulator.PlaceBlock(Block.Type, TargetTransform, TargetDimensions + Vector3.new(2,2,2))
+                else
+                    BlockManipulator.PlaceBlock(Block.Type, TargetTransform)
+                end
+            end)
+            
+            if not PlacementSuccess then continue end
+            
+            local StartTime = tick()
+            while not PlacementCompleted and (tick() - StartTime) < PlacementTimeoutDuration do
+                task.wait(PlacementInterval)
             end
-
-            if BlockInfo[4] then
-                task.wait(0.01)
-                local Success, Error = pcall(function()
-                    ApplyBlockAppearance(PlacedBlock, BlockInfo[4])
-                end)
-                if not Success then
-                    warn("Failed to apply block appearance:", Error)
+            
+            if not PlacementCompleted then
+                BlockAddedConnection:Disconnect()
+                continue
+            end
+            
+            if PlacedBlock then
+                if TargetDimensions then
+                    task.wait(BlockResizeInterval)
+                    pcall(function()
+                        local CurrentDimensions = PlacedBlock.Size
+                        for Axis = 1, 3 do
+                            local DimensionDifference = TargetDimensions[Axis] - CurrentDimensions[Axis]
+                            if DimensionDifference ~= 0 then
+                                local ResizeDirection = Vector3.new(
+                                    Axis == 1 and DimensionDifference or 0,
+                                    Axis == 2 and DimensionDifference or 0,
+                                    Axis == 3 and DimensionDifference or 0
+                                )
+                                local ResizeAction = DimensionDifference > 0 and "Grow" or "Shrink"
+                                BlockManipulator.ResizeBlock(PlacedBlock, ResizeDirection * 0.5, ResizeAction)
+                                BlockManipulator.ResizeBlock(PlacedBlock, ResizeDirection * -0.5, ResizeAction)
+                            end
+                        end
+                    end)
+                end
+                
+                local BlockData = Block.Data
+                if BlockData[4] then
+                    task.wait(BlockAppearanceInterval)
+                    pcall(function()
+                        local BlockColor = BlockData[4][1] ~= 0 and Color3.fromRGB(unpack(BlockData[4][1])) or PlacedBlock.Color
+                        local BlockMaterial = BlockData[4][2] and MaterialIndexToType[BlockData[4][2]] or PlacedBlock.Material
+                        BlockManipulator.PaintBlock(PlacedBlock, BlockColor, BlockMaterial)
+                    end)
                 end
             end
         end
