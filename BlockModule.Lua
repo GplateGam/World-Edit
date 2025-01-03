@@ -26,7 +26,9 @@ local function EquipTool(ToolName)
     Humanoid:EquipTool(Tool)
 end
 
-local function FindNearbyBlock(TargetCFrame)
+local function FindNearbyBlock(TargetCFrame, CustomSearchSize)
+    CustomSearchSize = CustomSearchSize or Vector3.new(5, 5, 5)
+
     if not TargetCFrame or typeof(TargetCFrame) ~= "CFrame" then
         return nil
     end
@@ -48,7 +50,7 @@ local function FindNearbyBlock(TargetCFrame)
 
     OverlapParams.FilterDescendantsInstances = FilterDescendants
     OverlapParams.FilterType = Enum.RaycastFilterType.Include
-    local RegionParts = Workspace:GetPartBoundsInBox(TargetCFrame, Vector3.new(5, 5, 5), OverlapParams)
+    local RegionParts = Workspace:GetPartBoundsInBox(TargetCFrame, CustomSearchSize, OverlapParams)
     local AllowedParts = {}
 
     for _, Model in pairs(FilterDescendants) do
@@ -71,7 +73,7 @@ local function FindNearbyBlock(TargetCFrame)
     return nil
 end
 
-function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame)
+function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame, CustomSearchSize)
     if not BlockTypeName or typeof(BlockTypeName) ~= "string" then
         warn("BlockTypeName must be a string")
         return nil
@@ -84,7 +86,7 @@ function BlockModule.PlaceBlock(BlockTypeName, BlockCFrame)
     
     EquipTool("BuildingTool")
 
-    local NearbyBlock = FindNearbyBlock(BlockCFrame)
+    local NearbyBlock = FindNearbyBlock(BlockCFrame, CustomSearchSize)
     if not NearbyBlock then
         return nil
     end
