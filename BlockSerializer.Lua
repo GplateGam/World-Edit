@@ -284,6 +284,9 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
         for _, Block in ipairs(SortedBlocks) do
             local TargetTransform = Block.CFrame
             local TargetDimensions = Block.Size
+            local TemplateBlock = ReplicatedStorage.Blocks:FindFirstChild(Block.Type)
+            if not TemplateBlock then return end
+            local BlockTemplateSize = TemplateBlock.Size
             
             local PlacedBlock
             local BlockAddedConnection
@@ -298,8 +301,8 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
             end)
             
             local PlacementSuccess = pcall(function()
-                if TargetDimensions then
-                    BlockManipulator.PlaceBlock(Block.Type, TargetTransform, TargetDimensions + Vector3.new(2,2,2))
+                if BlockTemplateSize then
+                    BlockManipulator.PlaceBlock(Block.Type, TargetTransform, BlockTemplateSize + Vector3.new(2,2,2))
                 else
                     BlockManipulator.PlaceBlock(Block.Type, TargetTransform)
                 end
@@ -309,7 +312,7 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
             
             local StartTime = tick()
             while not PlacementCompleted and (tick() - StartTime) < PlacementTimeoutDuration do
-                task.wait(PlacementInterval)
+                task.wait(0.01)
             end
             
             if not PlacementCompleted then
@@ -339,14 +342,35 @@ function BlockSerializer.DeserializeBlocks(SerializedData, PlacementInterval)
                 end
                 
                 local BlockData = Block.Data
-                if BlockData[4] then
+               if BlockData[4] then
                     task.wait(BlockAppearanceInterval)
                     pcall(function()
-                        local BlockColor = BlockData[4][1] ~= 0 and Color3.fromRGB(unpack(BlockData[4][1])) or PlacedBlock.Color
-                        local BlockMaterial = BlockData[4][2] and MaterialIndexToType[BlockData[4][2]] or PlacedBlock.Material
-                        BlockManipulator.PaintBlock(PlacedBlock, BlockColor, BlockMaterial)
+                        local ShouldPaint = false
+                        local BlockColor = PlacedBlock.Color
+                        local BlockMaterial = PlacedBlock.Material
+
+                        if BlockData[4][1] ~= 0 then
+                            BlockColor = Color3.fromRGB(unpack(BlockData[4][1]))
+                            ShouldPaint = true
+                        elseif not CompareColorValues(PlacedBlock.Color, TemplateBlock.Color) then
+                            BlockColor = TemplateBlock.Color
+                            ShouldPaint = true
+                        end
+
+                        if BlockData[4][2] then
+                            BlockMaterial = MaterialIndexToType[BlockData[4][2]]
+                            ShouldPaint = true
+                        elseif PlacedBlock.Material ~= TemplateBlock.Material then
+                            BlockMaterial = TemplateBlock.Material
+                            ShouldPaint = true
+                        end
+
+                        if ShouldPaint then
+                            BlockManipulator.PaintBlock(PlacedBlock, BlockColor, BlockMaterial)
+                        end
                     end)
                 end
+                task.wait(PlacementInterval)
             end
         end
     end
